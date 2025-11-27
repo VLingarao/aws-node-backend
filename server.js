@@ -1,86 +1,79 @@
-require('dotenv').config();
-const express = require("express");
-const mongoose = require("mongoose");
-const BikeSchema = require('./Model/Model');
-const cors = require('cors');
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import connection from "./db.js";
+
+dotenv.config();
 const app = express();
 
-const PORT = process.env.PORT || 3000;
-
-app.use(cors({
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
-}));
-
 app.use(express.json());
+app.use(cors());
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log("DB is Connected..."))
-    .catch(err => console.log("Error connecting to DB:", err.message));
-
-// Routes
-app.post('/newbike', async (req, res) => {
-    const { bikename, bikeprice, bikecolor } = req.body;
-    try {
-        const newdata = new BikeSchema({ bikename, bikeprice, bikecolor });
-        await newdata.save();
-        const bikes = await BikeSchema.find();
-        return res.json(bikes);
-    } catch (err) {
-        console.error(err.message);
-        return res.status(500).json({ error: err.message });
-    }
+// Test API
+app.get("/", (req, res) => {
+  res.send("Bike Backend Running!");
 });
 
-app.get('/getbikes', async (req, res) => {
-    try {
-        const data = await BikeSchema.find();
-        return res.json(data);
-    } catch (err) {
-        console.error(err.message);
-        return res.status(500).json({ error: err.message });
-    }
+// Get all bikes
+app.get("/getbikes", (req, res) => {
+  connection.query("SELECT * FROM bikes ORDER BY id DESC", (err, results) => {
+    if (err) return res.status(500).json({ error: err });
+    res.json(results);
+  });
 });
 
-// Get single data
-app.get('/getbikes/:id', async (req, res) => {
-    try {
-        const SingleData = await BikeSchema.findById(req.params.id);
-        return res.json(SingleData);
-    } catch (err) {
-        console.log(err.message);
-        return res.status(500).json({ error: err.message });
+// Insert new bike
+app.post("/newbike", (req, res) => {
+  const { bikename, bikeprice, bikecolor } = req.body;
+
+  connection.query(
+    "INSERT INTO bikes (bikename, bikeprice, bikecolor) VALUES (?, ?, ?)",
+    [bikename, bikeprice, bikecolor],
+    (err) => {
+      if (err) return res.status(500).json({ error: err });
+
+      connection.query(
+        "SELECT * FROM bikes ORDER BY id DESC",
+        (err2, results) => {
+          res.json(results);
+        }
+      );
     }
+  );
 });
 
-// Update bike by ID
-app.put('/updatebike/:id', async (req, res) => {
-    const { bikename, bikeprice, bikecolor } = req.body;
-    try {
-      await BikeSchema.findByIdAndUpdate(req.params.id, { bikename, bikeprice, bikecolor });
-      const bikes = await BikeSchema.find();
-      return res.json(bikes);
-    } catch (err) {
-      console.error(err.message);
-      return res.status(500).json({ error: err.message });
-    }
+// Delete
+app.delete("/deletebike/:id", (req, res) => {
+  const { id } = req.params;
+
+  connection.query("DELETE FROM bikes WHERE id = ?", [id], (err) => {
+    if (err) return res.status(500).json({ error: err });
+
+    connection.query("SELECT * FROM bikes ORDER BY id DESC", (err2, results) => {
+      res.json(results);
+    });
+  });
 });
 
-// Delete Method
-app.delete('/deletebike/:id', async (req, res) => {
-    try {
-        await BikeSchema.findByIdAndDelete(req.params.id);
-        const bikes = await BikeSchema.find();
-        return res.json(bikes);
-    } catch (err) {
-        console.log(err.message);
-        return res.status(500).json({ error: err.message });
+// Update
+app.put("/updatebike/:id", (req, res) => {
+  const { id } = req.params;
+  const { bikename, bikeprice, bikecolor } = req.body;
+
+  connection.query(
+    "UPDATE bikes SET bikename=?, bikeprice=?, bikecolor=? WHERE id=?",
+    [bikename, bikeprice, bikecolor, id],
+    (err) => {
+      if (err) return res.status(500).json({ error: err });
+
+      connection.query("SELECT * FROM bikes ORDER BY id DESC", (err2, results) => {
+        res.json(results);
+      });
     }
+  );
 });
 
-// Listen on the correct port for Vercel
-app.listen(PORT, () => console.log(`Server is running on port ${PORT}...`));
-
-// Export the app for Vercel
-module.exports = app;
+// Start server
+app.listen(process.env.PORT, () => {
+  console.log(`Server running on port ${process.env.PORT}`);
+});
